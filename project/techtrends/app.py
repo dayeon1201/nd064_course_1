@@ -92,9 +92,17 @@ def healthz():
 
 @app.route('/metrics')
 def metrics():
-    connection = get_db_connection()
-    post_count = connection.execute('SELECT COUNT(*) FROM posts').fetchone()[0]
-    connection.close()
+    try:
+        connection = get_db_connection()
+        post_count = connection.execute('SELECT COUNT(*) FROM posts').fetchone()[0]
+        connection.close()
+    except sqlite3.Error as e:
+        logging.error(f'Database error: {e}')
+        return jsonify({"error": "Database error"}), 500
+    except Exception as e:
+        logging.error(f'Unexpected error: {e}')
+        return jsonify({"error": "Unexpected error"}), 500
+
     response = {
         "db_connection_count": db_connection_count,
         "post_count": post_count
