@@ -1,13 +1,24 @@
 import sqlite3
+import logging
 
+from datetime import datetime
 from flask import Flask, jsonify, json, render_template, request, url_for, redirect, flash
 from werkzeug.exceptions import abort
+
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(message)s')
+
+db_connection_count = 0
 
 # Function to get a database connection.
 # This function connects to database with the name `database.db`
 def get_db_connection():
+    global db_connection_count
+
     connection = sqlite3.connect('database.db')
     connection.row_factory = sqlite3.Row
+
+    db_connection_count += 1 
+
     return connection
 
 # Function to get a post using its ID
@@ -16,6 +27,10 @@ def get_post(post_id):
     post = connection.execute('SELECT * FROM posts WHERE id = ?',
                         (post_id,)).fetchone()
     connection.close()
+    if post:
+        logging.info(f'Article "{post["title"]}" retrieved!')
+    else:
+        logging.info(f'Article with ID "{post_id}" not found!')
     return post
 
 # Define the Flask application
@@ -36,13 +51,15 @@ def index():
 def post(post_id):
     post = get_post(post_id)
     if post is None:
-      return render_template('404.html'), 404
+        logging.info(f'404 Error - Post ID "{post_id}" not found')
+        return render_template('404.html'), 404
     else:
-      return render_template('post.html', post=post)
+        return render_template('post.html', post=post)
 
 # Define the About Us page
 @app.route('/about')
 def about():
+    logging.info('About Us page retrieved')
     return render_template('about.html')
 
 # Define the post creation functionality 
@@ -60,7 +77,7 @@ def create():
                          (title, content))
             connection.commit()
             connection.close()
-
+            logging.info(f'New article "{title}" created!')
             return redirect(url_for('index'))
 
     return render_template('create.html')
@@ -70,6 +87,17 @@ def create():
 def healthz():
     response = {
         "result": "OK - healthy"
+    }
+    return jsonify(response), 200
+
+@app.route('/metrics')
+def metrics():
+    connection = get_db_connection()
+    post_count = connection.execute('SELECT COUNT(*) FROM posts').fetchone()[0]
+    connection.close()
+    response = {
+        "db_connection_count": db_connection_count,
+        "post_count": post_count
     }
     return jsonify(response), 200
 
